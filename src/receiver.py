@@ -52,46 +52,51 @@ def handle_sender(conn, address, name):
             continue
         elif msg_type == MSG_TYPES.get("filename"):
             # Length
-            msg_length = conn.recv(MSG_HEADERS.get("length")).decode(FORMAT)
-            if not msg_length:
+            filename_length = conn.recv(
+                MSG_HEADERS.get("length")).decode(FORMAT)
+            if not filename_length:
                 continue
-            msg_length = int(msg_length.strip())
+            filename_length = int(filename_length.strip())
 
             filename = b''
             while True:
-                max_length = max(msg_length, 4096)
+                max_length = max(filename_length, 4096)
                 filename += conn.recv(max_length)
 
-                msg_length -= max_length
-                if msg_length <= 0:
+                filename_length -= max_length
+                if filename_length <= 0:
                     break
 
             buffer["filename"] = filename.decode(FORMAT)
+
             continue
         elif msg_type == MSG_TYPES.get("file"):
             # Length
-            msg_length = conn.recv(MSG_HEADERS.get("length")).decode(FORMAT)
-            if not msg_length:
+            file_length = conn.recv(MSG_HEADERS.get("length")).decode(FORMAT)
+            if not file_length:
                 continue
-            msg_length = int(msg_length.strip())
+            file_length = int(file_length.strip())
+            print(f'File length: {file_length}')
 
             filebytes = b''
             while True:
-                max_length = max(msg_length, 4096)
+                max_length = max(file_length, 4096)
                 filebytes += conn.recv(max_length)
 
-                msg_length -= max_length
-                if msg_length <= 0:
+                file_length -= max_length
+                if file_length <= 0:
                     break
-            
+
             filename = buffer["filename"]
             del buffer["filename"]
-            
+
             f = open(filename, 'wb')
             f.write(filebytes)
             f.close()
 
             print(f'{filename} received from {address[0]}')
+
+            continue
 
     conn.close()
 

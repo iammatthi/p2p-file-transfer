@@ -4,7 +4,6 @@ import sys
 import time
 
 from config import get_config
-from os import system, name
 from tqdm import tqdm
 
 
@@ -166,7 +165,7 @@ def start():
     network_ips = get_network_ips(ip)
     available_receivers = get_available_receivers(network_ips)
 
-    print(f"{len(available_receivers)} available receivers" +
+    print(f"{len(available_receivers)} available receiver" +
           ("" if len(available_receivers) == 1 else "s"))
     receiver = get_receiver(available_receivers)
 
