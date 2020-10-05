@@ -21,12 +21,7 @@ def send_file(conn, path):
     """
     filename = re.match(r'.*[\\/](?P<filename>.*)',
                         path).groupdict().get("filename")
-    print(f'Filename length: {len(filename)}')
-    send_msg = f'{MSG_TYPES.get("filename"):<{MSG_HEADERS.get("type")}}' + \
-        f'{len(filename):<{MSG_HEADERS.get("length")}}' + filename
-    conn.send(bytes(send_msg, FORMAT))
-
-    time.sleep(1)
+    send(conn=conn, msg_type=MSG_TYPES.get("filename"), msg=filename)
 
     file_content = open(path, "rb").read()
     print(f'File length: {len(file_content)}')
@@ -34,6 +29,18 @@ def send_file(conn, path):
     send_msg = f'{MSG_TYPES.get("file"):<{MSG_HEADERS.get("type")}}' + \
         f'{len(file_content):<{MSG_HEADERS.get("length")}}'
     conn.sendall(bytes(send_msg, FORMAT) + file_content)
+
+
+def send(conn, msg_type, msg=None):
+    """
+    Send message
+    """
+    send_msg = f'{msg_type:<{MSG_HEADERS.get("type")}}'
+
+    if msg:
+        send_msg += f'{len(msg):<{MSG_HEADERS.get("length")}}' + msg
+
+    conn.sendall(bytes(send_msg, FORMAT))
 
 
 def sender():
@@ -88,14 +95,18 @@ def receiver():
     # --- Message
     filebytes = b''
     while True:
-        max_length = max(file_length, 4096)
-        filebytes += conn.recv(max_length)
+        # min_length = min(file_length, 4096)
+        min_length = 4096
+        print(min_length)
+        filebytes += conn.recv(min_length)
 
-        file_length -= max_length
+        file_length -= min_length
         if file_length <= 0:
             break
 
     # - Save file
+    length_filebytes = len(filebytes)
+    print(f'{length_filebytes} bytes downloaded')
     f = open(filename, 'wb')
     f.write(filebytes)
     f.close()
