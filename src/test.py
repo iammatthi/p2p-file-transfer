@@ -69,16 +69,19 @@ def receiver():
     print(f'Filename length: {filename_length}')
 
     # --- Message
-    filename = b''
+    filename_bytes = b''
+    remining_filename_length = filename_length
     while True:
-        max_length = max(filename_length, 4096)
-        filename += conn.recv(max_length)
+        min_length = min(remining_filename_length, 4096)
+        downloaded_bytes_length = conn.recv(min_length)
 
-        filename_length -= max_length
-        if filename_length <= 0:
+        filename_bytes += downloaded_bytes_length
+
+        remining_filename_length -= len(downloaded_bytes_length)
+        if remining_filename_length <= 0:
             break
 
-    filename = filename.decode(FORMAT)
+    filename = filename_bytes.decode(FORMAT)
 
     print(filename)
 
@@ -93,22 +96,23 @@ def receiver():
     print(f'File length: {file_length}')
 
     # --- Message
-    filebytes = b''
+    file_bytes = b''
+    remining_file_length = file_length
     while True:
-        # min_length = min(file_length, 4096)
-        min_length = 4096
-        print(min_length)
-        filebytes += conn.recv(min_length)
+        min_length = min(remining_file_length, 4096)
+        downloaded_bytes_length = conn.recv(min_length)
 
-        file_length -= min_length
-        if file_length <= 0:
+        file_bytes += downloaded_bytes_length
+
+        remining_file_length -= len(downloaded_bytes_length)
+        if remining_file_length <= 0:
             break
 
     # - Save file
-    length_filebytes = len(filebytes)
-    print(f'{length_filebytes} bytes downloaded')
+    file_bytes_length = len(file_bytes)
+    print(f'{file_bytes_length} bytes downloaded')
     f = open(filename, 'wb')
-    f.write(filebytes)
+    f.write(file_bytes)
     f.close()
 
     print(f'{filename} received from {address[0]}')

@@ -134,13 +134,9 @@ def send_file(conn, path):
     """
     Send file
     """
-    filename = re.match(r'.*[\\/](?P<filename>.*)', path).groupdict()
-    send_msg = f'{MSG_TYPES.get("filename"):<{MSG_HEADERS.get("type")}}' + \
-        f'{len(filename):<{MSG_HEADERS.get("length")}}' + \
-               filename.get("filename")
-    conn.send(bytes(send_msg, FORMAT))
-
-    time.sleep(1)
+    filename = re.match(r'.*[\\/](?P<filename>.*)',
+                        path).groupdict().get("filename")
+    send(conn=conn, msg_type=MSG_TYPES.get("filename"), msg=filename)
 
     file_content = open(path, "rb").read()
     send_msg = f'{MSG_TYPES.get("file"):<{MSG_HEADERS.get("type")}}' + \
@@ -157,7 +153,7 @@ def send(conn, msg_type, msg=None):
     if msg:
         send_msg += f'{len(msg):<{MSG_HEADERS.get("length")}}' + msg
 
-    conn.send(bytes(send_msg, FORMAT))
+    conn.sendall(bytes(send_msg, FORMAT))
 
 
 def start():

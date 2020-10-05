@@ -32,6 +32,18 @@ def get_ip():
         return ips[0]
 
 
+def send(conn, msg_type, msg=None):
+    """
+    Send message
+    """
+    send_msg = f'{msg_type:<{MSG_HEADERS.get("type")}}'
+
+    if msg:
+        send_msg += f'{len(msg):<{MSG_HEADERS.get("length")}}' + msg
+
+    conn.sendall(bytes(send_msg, FORMAT))
+
+
 def handle_sender(conn, address, name):
 
     buffer = {}
@@ -45,10 +57,7 @@ def handle_sender(conn, address, name):
         if msg_type == MSG_TYPES.get("disconnect"):
             break
         elif msg_type == MSG_TYPES.get("name"):
-            send_msg = name
-            send_msg = f'{MSG_TYPES.get("response"):<{MSG_HEADERS.get("type")}}' + \
-                f'{len(send_msg):<{MSG_HEADERS.get("length")}}' + send_msg
-            conn.send(bytes(send_msg, FORMAT))
+            send(conn=conn, msg_type=MSG_TYPES.get("response"), msg=name)
             continue
         elif msg_type == MSG_TYPES.get("filename"):
             # Length
@@ -58,16 +67,19 @@ def handle_sender(conn, address, name):
                 continue
             filename_length = int(filename_length.strip())
 
-            filename = b''
+            filename_bytes = b''
+            remining_filename_length = filename_length
             while True:
-                max_length = max(filename_length, 4096)
-                filename += conn.recv(max_length)
+                min_length = min(remining_filename_length, 4096)
+                downloaded_bytes_length = conn.recv(min_length)
 
-                filename_length -= max_length
-                if filename_length <= 0:
+                filename_bytes += downloaded_bytes_length
+
+                remining_filename_length -= len(downloaded_bytes_length)
+                if remining_filename_length <= 0:
                     break
 
-            buffer["filename"] = filename.decode(FORMAT)
+            buffer["filename"] = filename_bytes.decode(FORMAT)
 
             continue
         elif msg_type == MSG_TYPES.get("file"):
@@ -76,22 +88,24 @@ def handle_sender(conn, address, name):
             if not file_length:
                 continue
             file_length = int(file_length.strip())
-            print(f'File length: {file_length}')
 
-            filebytes = b''
+            file_bytes = b''
+            remining_file_length = file_length
             while True:
-                max_length = max(file_length, 4096)
-                filebytes += conn.recv(max_length)
+                min_length = min(remining_file_length, 4096)
+                downloaded_bytes_length = conn.recv(min_length)
 
-                file_length -= max_length
-                if file_length <= 0:
+                file_bytes += downloaded_bytes_length
+
+                remining_file_length -= len(downloaded_bytes_length)
+                if remining_file_length <= 0:
                     break
 
             filename = buffer["filename"]
             del buffer["filename"]
 
             f = open(filename, 'wb')
-            f.write(filebytes)
+            f.write(file_bytes)
             f.close()
 
             print(f'{filename} received from {address[0]}')
