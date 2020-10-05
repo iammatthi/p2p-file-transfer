@@ -64,7 +64,9 @@ class Receiver(Peer):
                     f.write(file_bytes)
                     f.close()
 
-                    print(f'{name} ({sender_ip}) has sended {filename} to you')
+                    print(f'{name} ({sender_ip}) has sent {filename} to you')
+
+                    self.send(conn=sender_socket, msg_type=self.msg_types.get("response"), msg="success")
 
                 elif msg_type == self.msg_types.get("filename"):
                     filename_length = self.receive_length(conn=sender_socket)
