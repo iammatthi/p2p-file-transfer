@@ -60,7 +60,7 @@ class Receiver(Peer):
                     file_bytes = self.receive_msg(
                         conn=sender_socket, msg_length=file_length)
 
-                    f = open(f'download/{filename}', 'wb')
+                    f = open(f'downloads/{filename}', 'wb')
                     f.write(file_bytes)
                     f.close()
 
