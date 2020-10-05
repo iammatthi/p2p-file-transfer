@@ -1,3 +1,4 @@
+import os
 import re
 import socket
 import time
@@ -18,17 +19,18 @@ def send_file(conn, path):
     """
     Send file
     """
-    filename = re.match(r'.*[\\/](?P<filename>.*)', path).groupdict()
+    filename = re.match(r'.*[\\/](?P<filename>.*)',
+                        path).groupdict().get("filename")
     print(f'Filename length: {len(filename)}')
     send_msg = f'{MSG_TYPES.get("filename"):<{MSG_HEADERS.get("type")}}' + \
-        f'{len(filename):<{MSG_HEADERS.get("length")}}' + \
-               filename.get("filename")
+        f'{len(filename):<{MSG_HEADERS.get("length")}}' + filename
     conn.send(bytes(send_msg, FORMAT))
 
     time.sleep(1)
 
     file_content = open(path, "rb").read()
     print(f'File length: {len(file_content)}')
+    print(f'Size: {os.path.getsize(path)}')
     send_msg = f'{MSG_TYPES.get("file"):<{MSG_HEADERS.get("type")}}' + \
         f'{len(file_content):<{MSG_HEADERS.get("length")}}'
     conn.sendall(bytes(send_msg, FORMAT) + file_content)
