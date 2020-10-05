@@ -70,8 +70,6 @@ def get_available_receivers(network_ips):
     Get available receivers
     """
     print("Checking available receivers...")
-    network_ips = ["192.168.178.21"]
-
     available_receivers = []
     for ip in tqdm(network_ips):
         receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -121,19 +119,16 @@ def get_receiver(available_receivers):
     """
     Get ip
     """
-    if len(available_receivers) > 1:
-        for i, receiver in enumerate(available_receivers):
-            print(f'{i+1}. {receiver.get("ip")} - {receiver.get("name")}')
+    for i, receiver in enumerate(available_receivers):
+        print(f'{i+1}. {receiver.get("ip")} - {receiver.get("name")}')
 
-        while True:
-            res = input("\nChoose the receiver: ")
+    while True:
+        res = input("\nChoose the receiver: ")
 
-            if res.isdigit() and int(res) >= 1 and int(res) <= len(available_receivers):
-                return available_receivers[int(res) - 1]
-            else:
-                print("Invalid input")
-    else:
-        return available_receivers[0]
+        if res.isdigit() and int(res) >= 1 and int(res) <= len(available_receivers):
+            return available_receivers[int(res) - 1]
+        else:
+            print("Invalid input")
 
 
 def send_file(conn, path):
@@ -141,13 +136,16 @@ def send_file(conn, path):
     Send file
     """
     filename = re.match(r'.*[\\/](?P<filename>.*)', path).groupdict()
-    send_msg = f'{MSG_TYPES.get("filename"):<{MSG_HEADERS.get("type")}}' + f'{len(filename):<{MSG_HEADERS.get("length")}}' + filename.get("filename")
+    send_msg = f'{MSG_TYPES.get("filename"):<{MSG_HEADERS.get("type")}}' + \
+        f'{len(filename):<{MSG_HEADERS.get("length")}}' + \
+               filename.get("filename")
     conn.send(bytes(send_msg, FORMAT))
 
     time.sleep(1)
 
     file_content = open(path, "rb").read()
-    send_msg = f'{MSG_TYPES.get("file"):<{MSG_HEADERS.get("type")}}' + f'{len(file_content):<{MSG_HEADERS.get("length")}}'
+    send_msg = f'{MSG_TYPES.get("file"):<{MSG_HEADERS.get("type")}}' + \
+        f'{len(file_content):<{MSG_HEADERS.get("length")}}'
     conn.sendall(bytes(send_msg, FORMAT) + file_content)
 
 

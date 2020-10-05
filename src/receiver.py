@@ -33,6 +33,8 @@ def get_ip():
 
 
 def handle_sender(conn, address, name):
+
+    buffer = {}
     while True:
         # Type
         msg_type = conn.recv(MSG_HEADERS.get("type")).decode(FORMAT)
@@ -44,11 +46,11 @@ def handle_sender(conn, address, name):
             break
         elif msg_type == MSG_TYPES.get("name"):
             send_msg = name
-            send_msg = f'{MSG_TYPES.get("response"):<{MSG_HEADERS.get("type")}}' + f'{len(send_msg):<{MSG_HEADERS.get("length")}}' + send_msg
+            send_msg = f'{MSG_TYPES.get("response"):<{MSG_HEADERS.get("type")}}' + \
+                f'{len(send_msg):<{MSG_HEADERS.get("length")}}' + send_msg
             conn.send(bytes(send_msg, FORMAT))
             continue
         elif msg_type == MSG_TYPES.get("filename"):
-            
             # Length
             msg_length = conn.recv(MSG_HEADERS.get("length")).decode(FORMAT)
             if not msg_length:
@@ -64,14 +66,9 @@ def handle_sender(conn, address, name):
                 if msg_length <= 0:
                     break
 
-            filename = filename.decode(FORMAT)
-
-            # Type
-            msg_type = conn.recv(MSG_HEADERS.get("type")).decode(FORMAT)
-            if not msg_type:
-                continue
-            msg_type = msg_type.strip()                
-
+            buffer["filename"] = filename.decode(FORMAT)
+            continue
+        elif msg_type == MSG_TYPES.get("file"):
             # Length
             msg_length = conn.recv(MSG_HEADERS.get("length")).decode(FORMAT)
             if not msg_length:
@@ -86,13 +83,15 @@ def handle_sender(conn, address, name):
                 msg_length -= max_length
                 if msg_length <= 0:
                     break
-                    
+            
+            filename = buffer["filename"]
+            del buffer["filename"]
             
             f = open(filename, 'wb')
             f.write(filebytes)
             f.close()
 
-            print(f'{filename} received from {address}')
+            print(f'{filename} received from {address[0]}')
 
     conn.close()
 
@@ -105,7 +104,8 @@ def start():
     receiver_socket.listen(5)
     while True:
         conn, address = receiver_socket.accept()
-        thread = threading.Thread(target=handle_sender, args=(conn, address, NAME))
+        thread = threading.Thread(
+            target=handle_sender, args=(conn, address, NAME))
         thread.start()
 
 

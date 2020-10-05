@@ -10,4 +10,3 @@ msg:
     response: "!RESPONSE"
 port: 5050
 format: "utf-8"
-disconnect_message: "!DISCONNECT"
