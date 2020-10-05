@@ -70,9 +70,9 @@ def get_available_receivers(network_ips):
     """
     print("Checking available receivers...")
     available_receivers = []
-    for ip in tqdm(network_ips):
+    for ip in tqdm(network_ips[40:60]):
         receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        socket.setdefaulttimeout(0.1)
+        socket.setdefaulttimeout(0.5)
 
         result = receiver_socket.connect_ex((ip, PORT))
         if result == 0:
@@ -93,21 +93,26 @@ def get_available_receivers(network_ips):
             msg_length = int(msg_length.strip())
 
             # Message
-            msg = b''
+            msg_bytes = b''
+            remining_msg_length = msg_length
             while True:
-                max_length = max(msg_length, 4096)
-                msg += receiver_socket.recv(max_length)
-                msg_length -= max_length
+                min_length = min(remining_msg_length, 4096)
+                downloaded_bytes_length = receiver_socket.recv(min_length)
 
-                if msg_length <= 0:
+                msg_bytes += downloaded_bytes_length
+
+                remining_msg_length -= len(downloaded_bytes_length)
+                if remining_msg_length <= 0:
                     break
 
-            send(conn=receiver_socket, msg_type=MSG_TYPES.get("disconnect"))
+            msg = msg_bytes.decode(FORMAT)
 
             available_receivers.append({
                 "ip": ip,
-                "name": msg.decode(FORMAT)
+                "name": msg
             })
+
+            send(conn=receiver_socket, msg_type=MSG_TYPES.get("disconnect"))
 
         receiver_socket.close()
 
