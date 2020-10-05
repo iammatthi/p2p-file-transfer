@@ -19,10 +19,9 @@ class Sender(Peer):
 
         receiver = None
 
-        print("1. Insert receiver ip")
-        print("2. Scan the network")
-
         while True:
+            print("1. Insert receiver ip")
+            print("2. Scan the network")
             res = input("\nChoose one option: ")
 
             if res == "1":
@@ -47,6 +46,7 @@ class Sender(Peer):
                 clear()
                 available_receivers = self.get_available_receivers(network_ips)
                 if len(available_receivers) == 0:
+                    clear()
                     print("0 available receivers")
                     continue
                 clear()
@@ -140,7 +140,7 @@ class Sender(Peer):
         available_receivers = []
         for ip in tqdm(network_ips):
             receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            receiver_socket.settimeout(0.1)
+            receiver_socket.settimeout(0.2)
 
             result = receiver_socket.connect_ex((ip, self.port))
             if result == 0:
