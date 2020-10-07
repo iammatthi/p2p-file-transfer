@@ -4,6 +4,7 @@ import re
 import socket
 
 from abc import ABC, abstractmethod
+from tqdm import tqdm
 
 from src.config import get_config, get_logger_config
 from src.utils import clear
@@ -60,16 +61,19 @@ class Peer(ABC):
 
         return int(msg_length.strip())
 
-    def receive_msg(self, conn, msg_length):
+    def receive_msg(self, conn, msg_length, show_progress=False):
         msg_bytes = b''
-        remining_msg_length = msg_length
 
-        while remining_msg_length > 0:
-            min_length = min(remining_msg_length, 4096)
+        with tqdm(total=msg_length, unit='B', unit_scale=True, unit_divisor=1024, disable=not show_progress) as pbar:
+            remining_msg_length = msg_length
+            while remining_msg_length > 0:
+                min_length = min(remining_msg_length, 4096)
 
-            downloaded_bytes_length = conn.recv(min_length)
-            msg_bytes += downloaded_bytes_length
-            remining_msg_length -= len(downloaded_bytes_length)
+                downloaded_bytes = conn.recv(min_length)
+                msg_bytes += downloaded_bytes
+                remining_msg_length -= len(downloaded_bytes)
+
+                pbar.update(len(downloaded_bytes))
 
         return msg_bytes
 
