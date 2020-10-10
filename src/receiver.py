@@ -3,130 +3,86 @@ import sys
 import threading
 import time
 
-from config import get_config
-
-MSG_HEADERS = get_config("msg", "headers")
-MSG_TYPES = get_config("msg", "types")
-
-PORT = get_config("port")
-FORMAT = get_config("format")
+from src.peer import Peer
+from src.utils import clear, get_ip
 
 
-def get_ip():
-    """
-    Get ip
-    """
-    ips = socket.gethostbyname_ex(socket.gethostname())[2]
-    if len(ips) > 1:
-        for i, ip in enumerate(ips):
-            print(f"{i+1}. {ip}")
+class Receiver(Peer):
 
+    def __init__(self):
+        super().__init__()
+
+    def start(self):
+        clear()
+
+        ip = get_ip()
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((ip, self.port))
+        s.listen(5)
+        clear()
+        print(f'Your are visible as: {self.name} ({ip})')
         while True:
-            res = input("\nChoose the local ip you want to use: ")
+            conn, address = s.accept()
+            thread = threading.Thread(
+                target=self.handle_sender, args=(conn, address))
+            thread.start()
 
-            if res.isdigit() and int(res) >= 1 and int(res) <= len(ips):
-                return ips[int(res)-1]
-            else:
-                print("Invalid input")
-    else:
-        return ips[0]
+    def handle_sender(self, sender_socket, address):
+        msg_type = self.receive_type(conn=sender_socket)
 
+        if msg_type == self.msg_types.get("name"):
+            self.send(conn=sender_socket, msg_type=self.msg_types.get(
+                "response"), msg=self.name)
 
-def send(conn, msg_type, msg=None):
-    """
-    Send message
-    """
-    send_msg = f'{msg_type:<{MSG_HEADERS.get("type")}}'
+        elif msg_type == self.msg_types.get("register"):
+            sender_ip = address[0]
+            name = "Unknown"
 
-    if msg:
-        send_msg += f'{len(msg):<{MSG_HEADERS.get("length")}}' + msg
+            msg_length = self.receive_length(conn=sender_socket)
+            name = self.receive_msg(
+                conn=sender_socket, msg_length=msg_length).decode(self.format)
+            print(f'\nNew connection with {name} ({sender_ip})')
 
-    conn.sendall(bytes(send_msg, FORMAT))
-
-
-def handle_sender(conn, address, name):
-
-    buffer = {}
-    while True:
-        # Type
-        msg_type = conn.recv(MSG_HEADERS.get("type")).decode(FORMAT)
-        if not msg_type:
-            continue
-        msg_type = msg_type.strip()
-
-        if msg_type == MSG_TYPES.get("disconnect"):
-            break
-        elif msg_type == MSG_TYPES.get("name"):
-            send(conn=conn, msg_type=MSG_TYPES.get("response"), msg=name)
-            continue
-        elif msg_type == MSG_TYPES.get("filename"):
-            # Length
-            filename_length = conn.recv(
-                MSG_HEADERS.get("length")).decode(FORMAT)
-            if not filename_length:
-                continue
-            filename_length = int(filename_length.strip())
-
-            filename_bytes = b''
-            remining_filename_length = filename_length
+            buffer = {}
             while True:
-                min_length = min(remining_filename_length, 4096)
-                downloaded_bytes_length = conn.recv(min_length)
+                msg_type = self.receive_type(conn=sender_socket)
 
-                filename_bytes += downloaded_bytes_length
-
-                remining_filename_length -= len(downloaded_bytes_length)
-                if remining_filename_length <= 0:
+                if msg_type == self.msg_types.get("disconnect"):
+                    print(f'{name} ({sender_ip}) is now disconnected')
                     break
 
-            buffer["filename"] = filename_bytes.decode(FORMAT)
+                elif msg_type == self.msg_types.get("file"):
+                    filename = buffer["filename"]
+                    del buffer["filename"]
 
-            continue
-        elif msg_type == MSG_TYPES.get("file"):
-            # Length
-            file_length = conn.recv(MSG_HEADERS.get("length")).decode(FORMAT)
-            if not file_length:
-                continue
-            file_length = int(file_length.strip())
+                    file_length = self.receive_length(conn=sender_socket)
+                    file_bytes = self.receive_msg(
+                        conn=sender_socket, msg_length=file_length, show_progress=True)
 
-            file_bytes = b''
-            remining_file_length = file_length
-            while True:
-                min_length = min(remining_file_length, 4096)
-                downloaded_bytes_length = conn.recv(min_length)
+                    f = open(f'downloads/{filename}', 'wb')
+                    f.write(file_bytes)
+                    f.close()
 
-                file_bytes += downloaded_bytes_length
+                    print(f'{name} ({sender_ip}) has sent {filename} to you')
 
-                remining_file_length -= len(downloaded_bytes_length)
-                if remining_file_length <= 0:
-                    break
+                    self.send(conn=sender_socket, msg_type=self.msg_types.get(
+                        "response"), msg="success")
 
-            filename = buffer["filename"]
-            del buffer["filename"]
+                elif msg_type == self.msg_types.get("filename"):
+                    filename_length = self.receive_length(conn=sender_socket)
+                    filename = self.receive_msg(
+                        conn=sender_socket, msg_length=filename_length).decode(self.format)
+                    buffer["filename"] = filename
 
-            f = open(filename, 'wb')
-            f.write(file_bytes)
-            f.close()
+                    print(f'{name} ({sender_ip}) wants to send you {filename}')
+                    res = input("Do you want to accept the file (Y/n): ")
 
-            print(f'{filename} received from {address[0]}')
+                    self.send(conn=sender_socket, msg_type=self.msg_types.get(
+                        "response"), msg=res.lower())
 
-            continue
+                elif msg_type == self.msg_types.get("name"):
+                    self.send(conn=sender_socket, msg_type=self.msg_types.get(
+                        "response"), msg=self.name)
 
-    conn.close()
-
-
-def start():
-    NAME = input("Insert your name: ")
-    IP = get_ip()
-    receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    receiver_socket.bind((IP, PORT))
-    receiver_socket.listen(5)
-    while True:
-        conn, address = receiver_socket.accept()
-        thread = threading.Thread(
-            target=handle_sender, args=(conn, address, NAME))
-        thread.start()
-
-
-if __name__ == '__main__':
-    start()
+        sender_socket.close()

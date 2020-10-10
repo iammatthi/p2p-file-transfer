@@ -3,178 +3,181 @@ import socket
 import sys
 import time
 
-from config import get_config
 from tqdm import tqdm
 
-
-MSG_HEADERS = get_config("msg", "headers")
-MSG_TYPES = get_config("msg", "types")
-
-PORT = get_config("port")
-FORMAT = get_config("format")
+from src.peer import Peer
+from src.utils import clear, get_ip
 
 
-def get_ip():
-    """
-    Get ip
-    """
-    ips = socket.gethostbyname_ex(socket.gethostname())[2]
-    if len(ips) > 1:
-        for i, ip in enumerate(ips):
-            print(f"{i+1}. {ip}")
+class Sender(Peer):
+
+    def __init__(self):
+        super().__init__()
+
+    def start(self):
+        clear()
+
+        receiver = None
 
         while True:
-            res = input("\nChoose the local ip you want to use: ")
+            print("1. Insert receiver ip")
+            print("2. Scan the network")
+            res = input("\nChoose one option: ")
 
-            if res.isdigit() and int(res) >= 1 and int(res) <= len(ips):
-                return ips[int(res) - 1]
+            if res == "1":
+                receiver_ip = input("Insert the receiver's ip: ")
+                receiver_socket = socket.socket(
+                    socket.AF_INET, socket.SOCK_STREAM)
+                receiver_socket.connect((receiver_ip, self.port))
+
+                receiver = {
+                    "ip": receiver_ip,
+                    "name": self.get_name(conn=receiver_socket)
+                }
+
+                receiver_socket.close()
+                break
+
+            elif res == "2":
+                clear()
+                ip = get_ip()
+                clear()
+                network_ips = self.get_network_ips(ip)
+                clear()
+                available_receivers = self.get_available_receivers(network_ips)
+                if len(available_receivers) == 0:
+                    clear()
+                    print("0 available receivers")
+                    continue
+                clear()
+                receiver = self.get_receiver(available_receivers)
+                break
+
             else:
                 print("Invalid input")
-    else:
-        return ips[0]
 
+        clear()
 
-def get_network_ips(ip):
-    """
-    Get network
-    """
-    ip_networks = re.match(
-        r'(?P<small>(?P<wide>\d{1,3}\.\d{1,3})\.\d{1,3})\.\d{1,3}', ip).groupdict()
-    print(f"1. {ip_networks.get('wide')}.0.0 (not supported yet)")
-    print(f"2. {ip_networks.get('small')}.0")
-
-    while True:
-        res = input("\nChoose your network: ")
-
-        if res.isdigit() and int(res) >= 1 and int(res) <= 2:
-            if int(res) == 1:
-                print("Not supported yet")
-                continue
-
-                # network = ip_networks.get('wide')
-                # network_ips = []
-                # for ip_host_1 in range(0, 256):
-                #     for ip_host_2 in range(0, 256):
-                #         network_ips.append(f"{network}.{ip_host_1}.{ip_host_2}")
-            else:
-                network = ip_networks.get('small')
-                return [f"{network}.{ip_host}" for ip_host in range(0, 256)]
-            break
-        else:
-            print("Invalid input")
-
-
-def get_available_receivers(network_ips):
-    """
-    Get available receivers
-    """
-    print("Checking available receivers...")
-    available_receivers = []
-    for ip in tqdm(network_ips[40:60]):
         receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        socket.setdefaulttimeout(0.5)
-
-        result = receiver_socket.connect_ex((ip, PORT))
-        if result == 0:
-            send(conn=receiver_socket, msg_type=MSG_TYPES.get("name"))
-
-            # Type
-            msg_type = receiver_socket.recv(
-                MSG_HEADERS.get("type")).decode(FORMAT)
-            if not msg_type:
-                continue
-            msg_type = msg_type.strip()
-
-            # Length
-            msg_length = receiver_socket.recv(
-                MSG_HEADERS.get("length")).decode(FORMAT)
-            if not msg_length:
-                continue
-            msg_length = int(msg_length.strip())
-
-            # Message
-            msg_bytes = b''
-            remining_msg_length = msg_length
+        receiver_socket.connect((receiver.get("ip"), self.port))
+        self.send(conn=receiver_socket, msg_type=self.msg_types.get(
+            "register"), msg=self.name)
+        try:
             while True:
-                min_length = min(remining_msg_length, 4096)
-                downloaded_bytes_length = receiver_socket.recv(min_length)
+                path = input("Insert the path of the file you want to send: ")
 
-                msg_bytes += downloaded_bytes_length
+                filename = re.match(
+                    r'.*[\\/](?P<filename>.*)', path).groupdict().get("filename")
+                self.send(conn=receiver_socket, msg_type=self.msg_types.get(
+                    "filename"), msg=filename)
+                print(
+                    f'Waiting for {receiver.get("name")} ({receiver.get("ip")})\'s response')
+                msg_type = self.receive_type(conn=receiver_socket)
+                if msg_type != self.msg_types.get("response"):
+                    continue
+                
+                msg_length = self.receive_length(conn=receiver_socket)
+                res = self.receive_msg(conn=receiver_socket, msg_length=msg_length).decode(self.format)
 
-                remining_msg_length -= len(downloaded_bytes_length)
-                if remining_msg_length <= 0:
-                    break
+                if res == "n":
+                    print(f'{receiver.get("name")} ({receiver.get("ip")}) has refused the file')
+                    continue
 
-            msg = msg_bytes.decode(FORMAT)
+                print("Sending the file..")
+                self.send_file(conn=receiver_socket, path=path)
 
-            available_receivers.append({
-                "ip": ip,
-                "name": msg
-            })
+                msg_type = self.receive_type(conn=receiver_socket)
+                if msg_type != self.msg_types.get("response"):
+                    continue
 
-            send(conn=receiver_socket, msg_type=MSG_TYPES.get("disconnect"))
+                msg_length = self.receive_length(conn=receiver_socket)
+                res = self.receive_msg(conn=receiver_socket, msg_length=msg_length).decode(self.format)
+                if res != "success":
+                    print("Error during file sending")
+                    continue
+                    
+                print("File sent successfully!")
 
-        receiver_socket.close()
+        except KeyboardInterrupt:
+            self.send(conn=receiver_socket,
+                      msg_type=self.msg_types.get("disconnect"))
 
-    return available_receivers
+    def get_network_ips(self, ip):
+        """
+        Get network
+        """
+        print("Select your network")
+        ip_networks = re.match(
+            r'(?P<small>(?P<wide>\d{1,3}\.\d{1,3})\.\d{1,3})\.\d{1,3}', ip).groupdict()
+        print(f"1. {ip_networks.get('wide')}.0.0 (not supported yet)")
+        print(f"2. {ip_networks.get('small')}.0")
 
+        while True:
+            res = input("\nChoose one option: ")
 
-def get_receiver(available_receivers):
-    """
-    Get ip
-    """
-    for i, receiver in enumerate(available_receivers):
-        print(f'{i+1}. {receiver.get("ip")} - {receiver.get("name")}')
+            if res.isdigit() and int(res) >= 1 and int(res) <= 2:
+                if int(res) == 1:
+                    print("Not supported yet")
+                    continue
 
-    while True:
-        res = input("\nChoose the receiver: ")
+                    # network = ip_networks.get('wide')
+                    # network_ips = []
+                    # for ip_host_1 in range(0, 256):
+                    #     for ip_host_2 in range(0, 256):
+                    #         network_ips.append(f"{network}.{ip_host_1}.{ip_host_2}")
+                else:
+                    network = ip_networks.get('small')
+                    return [f"{network}.{ip_host}" for ip_host in range(0, 256)]
+                break
+            else:
+                print("Invalid input")
 
-        if res.isdigit() and int(res) >= 1 and int(res) <= len(available_receivers):
-            return available_receivers[int(res) - 1]
-        else:
-            print("Invalid input")
+    def get_available_receivers(self, network_ips):
+        """
+        Get available receivers
+        """
+        print("Scanning the network for receivers..")
+        available_receivers = []
+        for ip in tqdm(network_ips):
+            receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            receiver_socket.settimeout(0.2)
 
+            result = receiver_socket.connect_ex((ip, self.port))
+            if result == 0:
+                available_receivers.append({
+                    "ip": ip,
+                    "name": self.get_name(conn=receiver_socket)
+                })
 
-def send_file(conn, path):
-    """
-    Send file
-    """
-    filename = re.match(r'.*[\\/](?P<filename>.*)',
-                        path).groupdict().get("filename")
-    send(conn=conn, msg_type=MSG_TYPES.get("filename"), msg=filename)
+            receiver_socket.close()
 
-    file_content = open(path, "rb").read()
-    send_msg = f'{MSG_TYPES.get("file"):<{MSG_HEADERS.get("type")}}' + \
-        f'{len(file_content):<{MSG_HEADERS.get("length")}}'
-    conn.sendall(bytes(send_msg, FORMAT) + file_content)
+        return available_receivers
 
+    def get_receiver(self, available_receivers):
+        """
+        Get ip
+        """
+        print("Select the receiver")
+        for i, receiver in enumerate(available_receivers):
+            print(f'{i+1}. {receiver.get("name")} ({receiver.get("ip")})')
 
-def send(conn, msg_type, msg=None):
-    """
-    Send message
-    """
-    send_msg = f'{msg_type:<{MSG_HEADERS.get("type")}}'
+        while True:
+            res = input("\nChoose one option: ")
 
-    if msg:
-        send_msg += f'{len(msg):<{MSG_HEADERS.get("length")}}' + msg
+            if res.isdigit() and int(res) >= 1 and int(res) <= len(available_receivers):
+                return available_receivers[int(res) - 1]
+            else:
+                print("Invalid input")
 
-    conn.sendall(bytes(send_msg, FORMAT))
+    def get_name(self, conn):
+        name = "Unknown"
 
+        self.send(conn=conn, msg_type=self.msg_types.get("name"))
 
-def start():
-    ip = get_ip()
-    network_ips = get_network_ips(ip)
-    available_receivers = get_available_receivers(network_ips)
+        msg_type = self.receive_type(conn=conn)
+        if msg_type == self.msg_types.get("response"):
+            msg_length = self.receive_length(conn=conn)
+            name = self.receive_msg(
+                conn=conn, msg_length=msg_length).decode(self.format)
 
-    print(f"{len(available_receivers)} available receiver" +
-          ("" if len(available_receivers) == 1 else "s"))
-    receiver = get_receiver(available_receivers)
-
-    path = input("Insert the path of the file you want to send: ")
-    receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    receiver_socket.connect((receiver.get("ip"), PORT))
-    send_file(conn=receiver_socket, path=path)
-
-
-if __name__ == "__main__":
-    start()
+        return name

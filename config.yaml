@@ -2,11 +2,12 @@ msg:
   headers:
     type: 20
     length: 64
-  types: 
+  types:
     disconnect: "!DISCONNECT"
-    name: "!NAME"
     file: "!FILE"
     filename: "!FILENAME"
+    name: "!NAME"
+    register: "!REGISTER"
     response: "!RESPONSE"
 port: 5050
 format: "utf-8"
