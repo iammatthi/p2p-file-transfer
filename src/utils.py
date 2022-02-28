@@ -16,18 +16,6 @@ def get_ip():
     """
     Get ip
     """
-    ips = socket.gethostbyname_ex(socket.gethostname())[2]
-    if len(ips) > 1:
-        print("Select your ip")
-        for i, ip in enumerate(ips):
-            print(f"{i+1}. {ip}")
-
-        while True:
-            res = input("\nChoose one option: ")
-
-            if res.isdigit() and int(res) >= 1 and int(res) <= len(ips):
-                return ips[int(res) - 1]
-            else:
-                print("Invalid input")
-    else:
-        return ips[0]
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    return s.getsockname()[0]

@@ -21,7 +21,7 @@ class Receiver(Peer):
         s.bind((ip, self.port))
         s.listen(5)
         clear()
-        print(f'Your are visible as: {self.name} ({ip})')
+        print(f'You are visible as: {self.name} ({ip})')
         while True:
             conn, address = s.accept()
             thread = threading.Thread(
